@@ -1,73 +1,35 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-
-interface ExcelRow {
-  [key: string]: string | number;
-}
 
 interface ExcelStore {
-  rows: ExcelRow[];
+  rows: any[];
   columns: string[];
-  setData: (rows: ExcelRow[], columns: string[]) => void;
-  updateCell: (rowIndex: number, columnKey: string, value: string | number) => void;
-  getProcessedRows: () => ExcelRow[];
+  setData: (rows: any[], columns: string[]) => void;
+  updateCell: (rowIndex: number, columnKey: string, value: any) => void;
 }
 
-const calculateRowValues = (row: ExcelRow): ExcelRow => {
-  const rate = parseFloat(String(row.rateinusd)) || 0;
-  const boxes = parseFloat(String(row.totalnoofboxes)) || 0;
-  const qty = parseFloat(String(row.totalqty)) || 0;
+export const useExcelStore = create<ExcelStore>((set) => ({
+  rows: [],
+  columns: [],
+  setData: (rows, columns) => set({ rows, columns }),
+  updateCell: (rowIndex, columnKey, value) => 
+    set((state) => {
+      const newRows = [...state.rows];
+      const row = newRows[rowIndex];
+      
+      // Update cell value
+      row[columnKey] = value;
   
-  const amount = rate * boxes * qty;
-  const discount = Math.min(amount * 0.15, 50);
-  const netAmount = amount - discount;
-  
-  return {
-    ...row,
-    productvalueinusd: amount,
-    discount: discount,
-    netamount: netAmount
-  };
-};
-
-export const useExcelStore = create<ExcelStore>()(
-  devtools(
-    (set, get) => ({
-      rows: [],
-      columns: [],
-      setData: (rows, columns) => {
-        // Process all rows at once
-        const processedRows = rows.map(row => calculateRowValues(row));
-        set({ rows: processedRows, columns });
-      },
-      updateCell: (rowIndex, columnKey, value) => {
-        set((state) => {
-          const newRows = [...state.rows];
-          const cleanKey = columnKey.toLowerCase().replace(/[^a-z0-9]/gi, '');
-          
-          // Only update if the value has changed
-          if (newRows[rowIndex][cleanKey] === value) {
-            return state;
-          }
-
-          newRows[rowIndex] = { 
-            ...newRows[rowIndex], 
-            [cleanKey]: value 
-          };
-          
-          // Recalculate only if the updated field affects calculations
-          if (['rateinusd', 'totalnoofboxes', 'totalqty'].includes(cleanKey)) {
-            newRows[rowIndex] = calculateRowValues(newRows[rowIndex]);
-          }
-          
-          return { rows: newRows };
-        });
-      },
-      getProcessedRows: () => {
-        const state = get();
-        return state.rows;
+      // Auto-calculate formulas
+      if (['rateinusd_6', 'totalnoofboxes_7', 'totalqty_8'].includes(columnKey)) {
+        const rate = parseFloat(row['rateinusd_6']) || 0;
+        const boxes = parseFloat(row['totalnoofboxes_7']) || 0;
+        const qty = parseFloat(row['totalqty_8']) || 0;
+        
+        row['productvalueinusd_9'] = rate * boxes * qty;
+        row['discount_15'] = Math.min(row['productvalueinusd_9'] * 0.15, 50);
+        row['netamount_16'] = row['productvalueinusd_9'] - row['discount_15'];
       }
+  
+      return { rows: newRows };
     }),
-    { name: 'excel-store' }
-  )
-);
+}));

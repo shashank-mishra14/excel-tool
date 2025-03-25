@@ -32,3 +32,30 @@ body {
 .rdg-header-cell {
   @apply bg-gray-100 font-medium;
 }
+
+table {
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th, td {
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  min-width: 120px;
+  max-width: 300px;
+  vertical-align: top;
+}
+
+th {
+  background-color: #f3f4f6;
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+}
+
+.filter-input {
+  margin-top: 4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+}
