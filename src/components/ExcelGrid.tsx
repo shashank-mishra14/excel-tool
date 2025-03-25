@@ -11,8 +11,9 @@ import {
   SortingState,
   ColumnFiltersState,
   FilterFn,
+  CellContext,
 } from '@tanstack/react-table';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { rankItem } from '@tanstack/match-sorter-utils';
 
 interface ExcelRow {
@@ -22,7 +23,49 @@ interface ExcelRow {
 
 const columnHelper = createColumnHelper<ExcelRow>();
 
-const fuzzyFilter: FilterFn<any> = (row, columnId, value, addMeta) => {
+const EditableCell = memo(({ 
+  value, 
+  isEditing, 
+  onEdit, 
+  onChange, 
+  onKeyDown 
+}: { 
+  value: string | number;
+  isEditing: boolean;
+  onEdit: () => void;
+  onChange: (value: string) => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+}) => {
+  return (
+    <div
+      className={`-m-3 p-3 ${
+        isEditing 
+          ? 'bg-blue-50 ring-2 ring-blue-500' 
+          : 'hover:bg-gray-50'
+      }`}
+      onClick={onEdit}
+      tabIndex={0}
+      role="gridcell"
+    >
+      {isEditing ? (
+        <input
+          type="text"
+          value={String(value)}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          autoFocus
+          onKeyDown={onKeyDown}
+        />
+      ) : (
+        <span className="block truncate">{value}</span>
+      )}
+    </div>
+  );
+});
+
+EditableCell.displayName = 'EditableCell';
+
+const fuzzyFilter: FilterFn<ExcelRow> = (row, columnId, value, addMeta) => {
   const itemRank = rankItem(row.getValue(columnId), value);
   addMeta({ itemRank });
   return itemRank.passed;
@@ -92,7 +135,47 @@ export const ExcelGrid = () => {
     }
   }, [setData]);
 
-  // Create memoized columns with proper typing
+  const handleKeyDown = (e: React.KeyboardEvent, info: CellContext<ExcelRow, string | number>) => {
+    const row = info.row.original;
+    const currentIndex = info.row.index;
+    const currentColumn = info.column.id;
+    
+    switch (e.key) {
+      case 'Enter':
+        if (editingCell) {
+          setEditingCell(null);
+          // Move to next row
+          const nextRow = table.getRowModel().rows[currentIndex + 1];
+          if (nextRow) {
+            setEditingCell({ rowId: nextRow.original.id, columnKey: currentColumn });
+          }
+        } else {
+          setEditingCell({ rowId: row.id, columnKey: currentColumn });
+        }
+        e.preventDefault();
+        break;
+      case 'Tab':
+        if (editingCell) {
+          setEditingCell(null);
+          // Move to next column
+          const columns = table.getAllColumns();
+          const currentColIndex = columns.findIndex(col => col.id === currentColumn);
+          const nextColumn = columns[currentColIndex + 1];
+          if (nextColumn) {
+            setEditingCell({ rowId: row.id, columnKey: nextColumn.id });
+            e.preventDefault();
+          }
+        }
+        break;
+      case 'Escape':
+        if (editingCell) {
+          setEditingCell(null);
+          e.preventDefault();
+        }
+        break;
+    }
+  };
+
   const tableColumns = useMemo(() => {
     return columns.map((col) => {
       const cleanKey = col
@@ -130,28 +213,13 @@ export const ExcelGrid = () => {
           const value = info.getValue();
 
           return (
-            <div
-              className={`-m-3 p-3 ${
-                isEditing 
-                  ? 'bg-blue-50 ring-2 ring-blue-500' 
-                  : 'hover:bg-gray-50'
-              }`}
-              onClick={() => setEditingCell({ rowId: row.id, columnKey: cleanKey })}
-            >
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={String(value)}
-                  onChange={(e) => updateCell(info.row.index, cleanKey, e.target.value)}
-                  className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                  onBlur={() => setEditingCell(null)}
-                  onKeyDown={(e) => e.key === 'Enter' && setEditingCell(null)}
-                />
-              ) : (
-                <span className="block truncate">{value}</span>
-              )}
-            </div>
+            <EditableCell
+              value={value}
+              isEditing={isEditing}
+              onEdit={() => setEditingCell({ rowId: row.id, columnKey: cleanKey })}
+              onChange={(newValue) => updateCell(info.row.index, cleanKey, newValue)}
+              onKeyDown={(e) => handleKeyDown(e, info)}
+            />
           );
         },
         size: 150,
@@ -160,7 +228,7 @@ export const ExcelGrid = () => {
         filterFn: fuzzyFilter,
       });
     });
-  }, [columns, editingCell, updateCell]);
+  }, [columns, editingCell, updateCell, handleKeyDown]);
 
   const table = useReactTable({
     data: rows as ExcelRow[],

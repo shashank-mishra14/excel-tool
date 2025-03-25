@@ -1,35 +1,67 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 
-interface ExcelStore {
-  rows: any[];
-  columns: string[];
-  setData: (rows: any[], columns: string[]) => void;
-  updateCell: (rowIndex: number, columnKey: string, value: any) => void;
+interface ExcelRow {
+  [key: string]: string | number;
+  id: string;
 }
 
-export const useExcelStore = create<ExcelStore>((set) => ({
-  rows: [],
-  columns: [],
-  setData: (rows, columns) => set({ rows, columns }),
-  updateCell: (rowIndex, columnKey, value) => 
-    set((state) => {
-      const newRows = [...state.rows];
-      const row = newRows[rowIndex];
-      
-      // Update cell value
-      row[columnKey] = value;
+interface ExcelStore {
+  rows: ExcelRow[];
+  columns: string[];
+  setData: (rows: ExcelRow[], columns: string[]) => void;
+  updateCell: (rowIndex: number, columnKey: string, value: string | number) => void;
+}
+
+// Helper function to calculate row values
+const calculateRowValues = (row: ExcelRow): ExcelRow => {
+  const rate = parseFloat(String(row['rateinusd_6'])) || 0;
+  const boxes = parseFloat(String(row['totalnoofboxes_7'])) || 0;
+  const qty = parseFloat(String(row['totalqty_8'])) || 0;
   
-      // Auto-calculate formulas
-      if (['rateinusd_6', 'totalnoofboxes_7', 'totalqty_8'].includes(columnKey)) {
-        const rate = parseFloat(row['rateinusd_6']) || 0;
-        const boxes = parseFloat(row['totalnoofboxes_7']) || 0;
-        const qty = parseFloat(row['totalqty_8']) || 0;
-        
-        row['productvalueinusd_9'] = rate * boxes * qty;
-        row['discount_15'] = Math.min(row['productvalueinusd_9'] * 0.15, 50);
-        row['netamount_16'] = row['productvalueinusd_9'] - row['discount_15'];
-      }
-  
-      return { rows: newRows };
+  return {
+    ...row,
+    'productvalueinusd_9': rate * boxes * qty,
+    'discount_15': Math.min(rate * boxes * qty * 0.15, 50),
+    'netamount_16': rate * boxes * qty - Math.min(rate * boxes * qty * 0.15, 50)
+  };
+};
+
+export const useExcelStore = create<ExcelStore>()(
+  devtools(
+    (set) => ({
+      rows: [],
+      columns: [],
+      setData: (rows, columns) => set({ rows, columns }),
+      updateCell: (rowIndex, columnKey, value) => 
+        set((state) => {
+          const row = state.rows[rowIndex];
+          
+          // Skip update if value hasn't changed
+          if (row[columnKey] === value) {
+            return state;
+          }
+
+          // Create new row with updated value
+          const updatedRow = {
+            ...row,
+            [columnKey]: value
+          };
+
+          // Only recalculate if necessary
+          if (['rateinusd_6', 'totalnoofboxes_7', 'totalqty_8'].includes(columnKey)) {
+            const newRow = calculateRowValues(updatedRow);
+            const newRows = [...state.rows];
+            newRows[rowIndex] = newRow;
+            return { rows: newRows };
+          }
+
+          // Simple update for non-calculated fields
+          const newRows = [...state.rows];
+          newRows[rowIndex] = updatedRow;
+          return { rows: newRows };
+        }),
     }),
-}));
+    { name: 'excel-store' }
+  ) as any // Type assertion to fix the devtools middleware type issue
+);
