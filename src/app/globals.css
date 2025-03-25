@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.rdg-cell {
+  @apply border border-gray-200 p-2;
+}
+
+.rdg-header-cell {
+  @apply bg-gray-100 font-medium;
+}
