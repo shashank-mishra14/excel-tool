@@ -77,6 +77,66 @@ export const ExcelGrid = () => {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [editingCell, setEditingCell] = useState<{ rowId: string; columnKey: string } | null>(null);
 
+  const table = useReactTable<ExcelRow>({
+    data: rows as ExcelRow[],
+    columns: [],
+    state: {
+      sorting,
+      columnFilters,
+    },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    filterFns: {
+      fuzzy: fuzzyFilter,
+    },
+    enableColumnFilters: true,
+    enableSorting: true,
+  });
+
+  const handleKeyDown: (e: React.KeyboardEvent, info: CellContext<ExcelRow, string | number>) => void = useCallback((e, info) => {
+    const row = info.row.original;
+    const currentIndex = info.row.index;
+    const currentColumn = info.column.id;
+    
+    switch (e.key) {
+      case 'Enter':
+        if (editingCell) {
+          setEditingCell(null);
+          // Move to next row
+          const nextRow = table.getRowModel().rows[currentIndex + 1];
+          if (nextRow) {
+            setEditingCell({ rowId: nextRow.original.id, columnKey: currentColumn });
+          }
+        } else {
+          setEditingCell({ rowId: row.id, columnKey: currentColumn });
+        }
+        e.preventDefault();
+        break;
+      case 'Tab':
+        if (editingCell) {
+          setEditingCell(null);
+          // Move to next column
+          const columns = table.getAllColumns();
+          const currentColIndex = columns.findIndex(col => col.id === currentColumn);
+          const nextColumn = columns[currentColIndex + 1];
+          if (nextColumn) {
+            setEditingCell({ rowId: row.id, columnKey: nextColumn.id });
+            e.preventDefault();
+          }
+        }
+        break;
+      case 'Escape':
+        if (editingCell) {
+          setEditingCell(null);
+          e.preventDefault();
+        }
+        break;
+    }
+  }, [editingCell, table]);
+
   // Process Excel file with proper error handling
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -135,49 +195,8 @@ export const ExcelGrid = () => {
     }
   }, [setData]);
 
-  const handleKeyDown = (e: React.KeyboardEvent, info: CellContext<ExcelRow, string | number>) => {
-    const row = info.row.original;
-    const currentIndex = info.row.index;
-    const currentColumn = info.column.id;
-    
-    switch (e.key) {
-      case 'Enter':
-        if (editingCell) {
-          setEditingCell(null);
-          // Move to next row
-          const nextRow = table.getRowModel().rows[currentIndex + 1];
-          if (nextRow) {
-            setEditingCell({ rowId: nextRow.original.id, columnKey: currentColumn });
-          }
-        } else {
-          setEditingCell({ rowId: row.id, columnKey: currentColumn });
-        }
-        e.preventDefault();
-        break;
-      case 'Tab':
-        if (editingCell) {
-          setEditingCell(null);
-          // Move to next column
-          const columns = table.getAllColumns();
-          const currentColIndex = columns.findIndex(col => col.id === currentColumn);
-          const nextColumn = columns[currentColIndex + 1];
-          if (nextColumn) {
-            setEditingCell({ rowId: row.id, columnKey: nextColumn.id });
-            e.preventDefault();
-          }
-        }
-        break;
-      case 'Escape':
-        if (editingCell) {
-          setEditingCell(null);
-          e.preventDefault();
-        }
-        break;
-    }
-  };
-
   const tableColumns = useMemo(() => {
-    return columns.map((col) => {
+    return columns.map((col: string) => {
       const cleanKey = col
         .toLowerCase()
         .replace(/[^a-z0-9]/gi, '')
@@ -230,24 +249,11 @@ export const ExcelGrid = () => {
     });
   }, [columns, editingCell, updateCell, handleKeyDown]);
 
-  const table = useReactTable({
-    data: rows as ExcelRow[],
-    columns: tableColumns,
-    state: {
-      sorting,
-      columnFilters,
-    },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    filterFns: {
-      fuzzy: fuzzyFilter,
-    },
-    enableColumnFilters: true,
-    enableSorting: true,
-  });
+  // Update table columns
+  table.setOptions(prev => ({
+    ...prev,
+    columns: tableColumns
+  }));
 
   return (
     <div className="p-4 bg-white rounded-lg shadow-lg">
@@ -275,9 +281,9 @@ export const ExcelGrid = () => {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                {table.getHeaderGroups().map(headerGroup => (
+                {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id}>
-                    {headerGroup.headers.map(header => (
+                    {headerGroup.headers.map((header) => (
                       <th
                         key={header.id}
                         colSpan={header.colSpan}
@@ -297,12 +303,12 @@ export const ExcelGrid = () => {
                 ))}
               </thead>
               <tbody className="bg-white">
-                {table.getRowModel().rows.map(row => (
+                {table.getRowModel().rows.map((row) => (
                   <tr 
                     key={row.id} 
                     className="hover:bg-gray-50 transition-colors"
                   >
-                    {row.getVisibleCells().map(cell => (
+                    {row.getVisibleCells().map((cell) => (
                       <td
                         key={cell.id}
                         className="p-3 border-b border-r border-gray-200 text-gray-800"

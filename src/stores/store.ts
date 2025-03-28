@@ -63,5 +63,5 @@ export const useExcelStore = create<ExcelStore>()(
         }),
     }),
     { name: 'excel-store' }
-  ) as any
+  )
 );
