@@ -32,9 +32,9 @@ export const useExcelStore = create<ExcelStore>()(
     (set) => ({
       rows: [],
       columns: [],
-      setData: (rows, columns) => set({ rows, columns }),
-      updateCell: (rowIndex, columnKey, value) => 
-        set((state) => {
+      setData: (rows: ExcelRow[], columns: string[]) => set({ rows, columns }),
+      updateCell: (rowIndex: number, columnKey: string, value: string | number) => 
+        set((state: ExcelStore) => {
           const row = state.rows[rowIndex];
           
           // Skip update if value hasn't changed
@@ -63,5 +63,5 @@ export const useExcelStore = create<ExcelStore>()(
         }),
     }),
     { name: 'excel-store' }
-  ) as any // Type assertion to fix the devtools middleware type issue
+  ) as any
 );
